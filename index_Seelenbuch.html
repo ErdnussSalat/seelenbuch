@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seelenbuch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1410;
+    --paper: #faf6ef;
+    --paper2: #f5efe4;
+    --accent: #8b4a2f;
+    --gold: #c9954a;
+    --muted: #8a7968;
+    --line: #e0d8cc;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .screen { display: none; flex-direction: column; min-height: 100vh; }
+  .screen.active { display: flex; }
+
+  /* HOME */
+  #home { background: var(--paper); padding: 40px 28px 80px; }
+
+  .home-header { text-align: center; margin-bottom: 32px; }
+  .home-header .label { font-size: 10px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  .home-header h1 { font-family: 'Playfair Display', serif; font-size: 38px; font-weight: 400; line-height: 1.15; }
+  .home-header h1 em { font-style: italic; color: var(--accent); }
+  .home-header .subtitle { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  .stats-row { display: flex; gap: 12px; margin-bottom: 24px; }
+  .stat-box { flex: 1; background: white; border-radius: 10px; padding: 14px; text-align: center; }
+  .stat-box .stat-num { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--accent); }
+  .stat-box .stat-lbl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+  .year-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .year-tab { padding: 6px 16px; border: 1px solid var(--line); border-radius: 20px; font-size: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; font-family: 'Lato', sans-serif; }
+  .year-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .section-title { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+  .entry-card { background: white; border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; border-left: 3px solid var(--gold); cursor: pointer; transition: transform 0.15s; position: relative; }
+  .entry-card:hover { transform: translateX(3px); }
+  .entry-card .entry-date { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+  .entry-card .entry-preview { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--ink); line-height: 1.5; }
+  .entry-card .entry-mood { position: absolute; top: 16px; right: 16px; font-size: 18px; }
+  .entry-card .entry-summary { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 8px; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state .big { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.7; }
+
+  .fab { position: fixed; bottom: 28px; right: 50%; transform: translateX(50%); width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: white; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 6px 20px rgba(139,74,47,0.4); display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+  .fab:hover { transform: translateX(50%) scale(1.08); }
+
+  /* WRITE */
+  #write { background: var(--paper2); }
+
+  .write-header { padding: 24px 24px 16px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .back-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; padding: 4px; }
+  .write-header-text .date-line { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); }
+  .write-header-text h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 400; }
+
+  .prompt-box { margin: 20px 20px 0; background: white; border-radius: 12px; padding: 16px 18px; border-left: 3px solid var(--accent); }
+  .prompt-box .prompt-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .prompt-box .prompt-text { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--ink); line-height: 1.5; font-style: italic; }
+  .new-prompt-btn { margin-top: 10px; background: none; border: 1px solid var(--line); border-radius: 20px; padding: 5px 14px; font-size: 11px; color: var(--muted); cursor: pointer; font-family: 'Lato', sans-serif; transition: all 0.2s; }
+  .new-prompt-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .write-area { margin: 16px 20px 0; }
+  #journal-text { width: 100%; min-height: 220px; border: none; background: white; border-radius: 12px; padding: 20px; font-family: 'Playfair Display', serif; font-size: 16px; line-height: 1.8; color: var(--ink); resize: none; outline: none; }
+  #journal-text::placeholder { color: #c8bfb3; font-style: italic; }
+
+  .mood-row { margin: 14px 20px 0; display: flex; gap: 10px; align-items: center; }
+  .mood-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .mood-btn { background: none; border: 2px solid var(--line); border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+  .mood-btn.selected { border-color: var(--accent); background: #fff0e8; transform: scale(1.15); }
+
+  .ai-loading { display: none; align-items: center; gap: 8px; padding: 12px 20px; color: var(--muted); font-size: 13px; font-style: italic; }
+  .ai-loading.show { display: flex; }
+  .dot-anim span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--gold); margin: 0 2px; animation: bounce 1.2s infinite; }
+  .dot-anim span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-anim span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+  .write-actions { padding: 20px; display: flex; gap: 10px; }
+  .btn-save { flex: 1; background: var(--accent); color: white; border: none; border-radius: 12px; padding: 16px; font-family: 'Playfair Display', serif; font-size: 16px; cursor: pointer; transition: all 0.2s; }
+  .btn-save:hover { background: #7a3d25; }
+  .btn-save:disabled { background: var(--muted); cursor: not-allowed; }
+  .btn-ai { background: white; color: var(--accent); border: 2px solid var(--accent); border-radius: 12px; padding: 14px 18px; font-size: 13px; cursor: pointer; font-family: 'Lato', sans-serif; white-space: nowrap; }
+  .btn-ai:hover { background: #fff0e8; }
+
+  .inline-reflection { margin: 0 20px 0; background: white; border-radius: 12px; padding: 16px 18px; border-left: 3px solid var(--gold); }
+  .inline-reflection .ref-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  .inline-reflection .ref-text { font-size: 14px; line-height: 1.7; color: var(--muted); }
+
+  /* VOICE */
+  .voice-bar { margin: 16px 20px 0; background: white; border-radius: 14px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .voice-btn { width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; transition: all 0.2s; background: var(--paper2); }
+  .voice-btn.idle { background: var(--paper2); box-shadow: none; }
+  .voice-btn.recording { background: #e8302a; box-shadow: 0 0 0 0 rgba(232,48,42,0.4); animation: pulse-ring 1.2s infinite; }
+  .voice-btn.transcribing { background: var(--gold); animation: none; }
+  @keyframes pulse-ring { 0%{box-shadow:0 0 0 0 rgba(232,48,42,0.4)} 70%{box-shadow:0 0 0 12px rgba(232,48,42,0)} 100%{box-shadow:0 0 0 0 rgba(232,48,42,0)} }
+
+  .voice-info { flex: 1; min-width: 0; }
+  .voice-status { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .voice-timer { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--ink); letter-spacing: 2px; }
+  .voice-wave { display: flex; align-items: center; gap: 3px; height: 20px; }
+  .voice-wave span { display: inline-block; width: 3px; border-radius: 2px; background: var(--accent); animation: wave 0.8s ease-in-out infinite; }
+  .voice-wave span:nth-child(1){height:6px;animation-delay:0s}
+  .voice-wave span:nth-child(2){height:14px;animation-delay:0.1s}
+  .voice-wave span:nth-child(3){height:10px;animation-delay:0.2s}
+  .voice-wave span:nth-child(4){height:18px;animation-delay:0.3s}
+  .voice-wave span:nth-child(5){height:8px;animation-delay:0.4s}
+  .voice-wave span:nth-child(6){height:16px;animation-delay:0.15s}
+  .voice-wave span:nth-child(7){height:6px;animation-delay:0.25s}
+  @keyframes wave { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(0.4)} }
+  .voice-wave.hidden { display: none; }
+
+  .voice-transcript-preview { display: none; }
+  .live-transcript-box { display: none; margin: 0 20px; background: white; border-radius: 12px; padding: 14px 18px; border-left: 3px solid #e8302a; position: relative; }
+  .live-transcript-box.visible { display: block; }
+  .live-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #e8302a; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #e8302a; animation: blink 1s infinite; flex-shrink: 0; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .live-confirmed { font-family: "Playfair Display", serif; font-size: 14px; color: var(--ink); line-height: 1.7; min-height: 20px; }
+  .live-interim { font-family: "Playfair Display", serif; font-size: 14px; color: var(--muted); font-style: italic; line-height: 1.7; margin-top: 2px; }
+  .live-cursor { display: inline-block; width: 2px; height: 14px; background: var(--accent); margin-left: 2px; vertical-align: middle; animation: blink 0.8s infinite; }
+
+  /* DETAIL */
+  #detail { background: var(--paper); }
+  .detail-header { padding: 24px 24px 16px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); }
+  .detail-body { padding: 24px; flex: 1; overflow-y: auto; }
+  .detail-date { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+  .detail-mood-display { font-size: 28px; margin-bottom: 16px; }
+  .detail-text { font-family: 'Playfair Display', serif; font-size: 17px; line-height: 1.9; color: var(--ink); white-space: pre-wrap; }
+  .detail-summary-box { margin-top: 28px; background: white; border-radius: 12px; padding: 18px 20px; border-left: 3px solid var(--gold); }
+  .detail-summary-box .sum-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  .detail-summary-box .sum-text { font-size: 14px; line-height: 1.7; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="home" class="screen active">
+  <div class="home-header">
+    <div class="label">Mein digitales</div>
+    <h1>Seelen<em>buch</em></h1>
+    <div class="subtitle">Ein Ort nur für dich</div>
+  </div>
+
+  <div class="stats-row" id="stats-row" style="display:none">
+    <div class="stat-box">
+      <div class="stat-num" id="stat-count">0</div>
+      <div class="stat-lbl">Einträge</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="stat-days">0</div>
+      <div class="stat-lbl">Tage</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="stat-year">2026</div>
+      <div class="stat-lbl">Jahr</div>
+    </div>
+  </div>
+
+  <div class="year-tabs" id="year-tabs"></div>
+  <div class="section-title">Einträge</div>
+  <div id="entries-list"></div>
+
+  <button class="fab" onclick="showWrite()">✦</button>
+</div>
+
+<!-- WRITE -->
+<div id="write" class="screen">
+  <div class="write-header">
+    <button class="back-btn" onclick="showHome()">←</button>
+    <div class="write-header-text">
+      <div class="date-line" id="write-date"></div>
+      <h2>Neuer Eintrag</h2>
+    </div>
+  </div>
+
+  <div class="prompt-box">
+    <div class="prompt-label">✦ Denkanstoß</div>
+    <div class="prompt-text" id="current-prompt"></div>
+    <button class="new-prompt-btn" onclick="newPrompt()">↻ Anderen Anstoß</button>
+  </div>
+
+  <!-- VOICE BAR -->
+  <div class="voice-bar">
+    <button class="voice-btn idle" id="voice-btn" onclick="toggleVoice()" title="Sprachaufnahme">&#127897;&#65039;</button>
+    <div class="voice-info">
+      <div class="voice-status" id="voice-status">Drück den Knopf und red drauf los</div>
+      <div class="voice-timer" id="voice-timer" style="display:none">0:00</div>
+      <div class="voice-wave hidden" id="voice-wave">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="voice-transcript-preview" id="voice-preview"></div>
+    </div>
+    <button id="voice-stop-btn" onclick="stopVoice()" style="display:none; background:none; border:1px solid var(--line); border-radius:20px; padding:6px 14px; font-size:12px; color:var(--muted); cursor:pointer; font-family:Lato,sans-serif;">Stop</button>
+  </div>
+
+  <!-- LIVE TRANSCRIPT -->
+  <div class="live-transcript-box" id="live-box">
+    <div class="live-label"><span class="live-dot"></span> Live-Transkription</div>
+    <div class="live-confirmed" id="live-confirmed"></div>
+    <div class="live-interim" id="live-interim"><span class="live-cursor"></span></div>
+  </div>
+
+  <div class="write-area">
+    <textarea id="journal-text" placeholder="Oder schreib einfach drauf los... kein Druck, keine Regeln."></textarea>
+  </div>
+
+  <div class="mood-row">
+    <span class="mood-label">Stimmung</span>
+    <button class="mood-btn" data-mood="✨" onclick="selectMood(this)">✨</button>
+    <button class="mood-btn" data-mood="😊" onclick="selectMood(this)">😊</button>
+    <button class="mood-btn" data-mood="😌" onclick="selectMood(this)">😌</button>
+    <button class="mood-btn" data-mood="😔" onclick="selectMood(this)">😔</button>
+    <button class="mood-btn" data-mood="🌊" onclick="selectMood(this)">🌊</button>
+    <button class="mood-btn" data-mood="🔥" onclick="selectMood(this)">🔥</button>
+  </div>
+
+  <div id="inline-reflection-container"></div>
+
+  <div class="ai-loading" id="ai-loading">
+    <div class="dot-anim"><span></span><span></span><span></span></div>
+    Claude denkt nach...
+  </div>
+
+  <div class="write-actions">
+    <button class="btn-ai" onclick="getReflection()">💬 Reflexion</button>
+    <button class="btn-save" id="save-btn" onclick="saveEntry()">Eintrag speichern</button>
+  </div>
+</div>
+
+<!-- DETAIL -->
+<div id="detail" class="screen">
+  <div class="detail-header">
+    <button class="back-btn" onclick="showHome()">←</button>
+    <div>
+      <div class="detail-date" id="detail-date"></div>
+    </div>
+  </div>
+  <div class="detail-body">
+    <div class="detail-mood-display" id="detail-mood"></div>
+    <div class="detail-text" id="detail-text"></div>
+    <div class="detail-summary-box" id="detail-summary-box" style="display:none">
+      <div class="sum-label">✦ Reflexion</div>
+      <div class="sum-text" id="detail-summary-text"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'seelenbuch_v1';
+
+function loadEntries() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveEntriesToStorage(entries) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+const PROMPTS = [
+  "Was hat dich heute wirklich beschäftigt?",
+  "Wenn du heute eine Farbe wärst – welche und warum?",
+  "Was wolltest du heute sagen, hast es aber nicht?",
+  "Worüber hast du mehr nachgedacht als du wolltest?",
+  "Was hat dir heute Energie gegeben – was hat sie genommen?",
+  "Welcher Moment heute war still und bedeutsam?",
+  "Was trägst du gerade mit dir rum, ohne es jemandem gesagt zu haben?",
+  "Was wäre heute anders gewesen, wenn du mutiger gewesen wärst?",
+  "Was beschäftigt dich, das du eigentlich loslassen wolltest?",
+  "Was hat dich heute überrascht – an dir oder an der Welt?",
+  "Wenn du heute Abend einen Brief an dein zukünftiges Ich schreibst – was stände drin?",
+  "Was ist gerade in deinem Kopf, das noch keinen Namen hat?",
+];
+
+let promptIndex = Math.floor(Math.random() * PROMPTS.length);
+let selectedMood = '';
+let currentYear = new Date().getFullYear();
+
+function newPrompt() {
+  promptIndex = (promptIndex + 1) % PROMPTS.length;
+  document.getElementById('current-prompt').textContent = PROMPTS[promptIndex];
+}
+
+function selectMood(btn) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedMood = btn.dataset.mood;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  const days = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  const months = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  return `${days[d.getDay()]}, ${d.getDate()}. ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function showHome() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('home').classList.add('active');
+  renderHome();
+}
+
+function showWrite() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('write').classList.add('active');
+  document.getElementById('write-date').textContent = formatDate(new Date().toISOString()).toUpperCase();
+  document.getElementById('journal-text').value = '';
+  document.getElementById('current-prompt').textContent = PROMPTS[promptIndex];
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  selectedMood = '';
+  document.getElementById('inline-reflection-container').innerHTML = '';
+  document.getElementById('ai-loading').classList.remove('show');
+}
+
+function renderHome() {
+  const entries = loadEntries();
+  const list = document.getElementById('entries-list');
+
+  if (entries.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="big">📖</div><p>Noch kein Eintrag.<br>Schreib deinen ersten Gedanken<br>– einfach drauf los.</p></div>';
+    document.getElementById('stats-row').style.display = 'none';
+    document.getElementById('year-tabs').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('stats-row').style.display = 'flex';
+  document.getElementById('stat-count').textContent = entries.length;
+  const uniqueDays = new Set(entries.map(e => e.date.slice(0,10))).size;
+  document.getElementById('stat-days').textContent = uniqueDays;
+  document.getElementById('stat-year').textContent = currentYear;
+
+  const years = [...new Set(entries.map(e => new Date(e.date).getFullYear()))].sort((a,b) => b-a);
+  document.getElementById('year-tabs').innerHTML = years.map(y =>
+    `<button class="year-tab ${y===currentYear?'active':''}" onclick="setYear(${y})">${y}</button>`
+  ).join('');
+
+  const filtered = entries
+    .filter(e => new Date(e.date).getFullYear() === currentYear)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  list.innerHTML = filtered.length === 0
+    ? '<div class="empty-state"><p>Noch keine Einträge in ' + currentYear + '</p></div>'
+    : filtered.map(e => `
+      <div class="entry-card" onclick='openEntry(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+        <div class="entry-date">${formatDate(e.date)}</div>
+        <div class="entry-mood">${e.mood||''}</div>
+        <div class="entry-preview">${e.text.slice(0,120)}${e.text.length>120?'…':''}</div>
+        ${e.summary ? `<div class="entry-summary">${e.summary.slice(0,100)}…</div>` : ''}
+      </div>`).join('');
+}
+
+function openEntry(entry) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('detail').classList.add('active');
+  document.getElementById('detail-date').textContent = formatDate(entry.date).toUpperCase();
+  document.getElementById('detail-mood').textContent = entry.mood || '';
+  document.getElementById('detail-text').textContent = entry.text;
+  if (entry.summary) {
+    document.getElementById('detail-summary-box').style.display = 'block';
+    document.getElementById('detail-summary-text').textContent = entry.summary;
+  } else {
+    document.getElementById('detail-summary-box').style.display = 'none';
+  }
+}
+
+function setYear(y) {
+  currentYear = y;
+  renderHome();
+}
+
+async function saveEntry() {
+  const text = document.getElementById('journal-text').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Wird gespeichert…';
+
+  // Get reflection text if present
+  const refEl = document.querySelector('.inline-reflection .ref-text');
+  const summary = refEl ? refEl.textContent : null;
+
+  const entries = loadEntries();
+  entries.push({
+    id: Date.now(),
+    date: new Date().toISOString(),
+    text,
+    mood: selectedMood,
+    summary
+  });
+  saveEntriesToStorage(entries);
+  btn.disabled = false; btn.textContent = 'Eintrag speichern';
+  showHome();
+}
+
+async function getReflection() {
+  const text = document.getElementById('journal-text').value.trim();
+  if (!text) { alert('Schreib erst etwas, dann kann ich dir eine Reflexion geben :)'); return; }
+
+  document.getElementById('ai-loading').classList.add('show');
+  document.getElementById('inline-reflection-container').innerHTML = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `Du bist ein einfühlsamer, warmherziger Begleiter – wie ein guter Freund, dem man alles erzählen kann. Jemand hat dir seinen Tagebucheintrag geteilt, oft gesprochen, mit springenden Gedanken, Gefühlen, Realisierungen, allem durcheinander.
+
+Deine Aufgabe:
+1. Geh auf ALLES ein was die Person gesagt hat – auch die kleinen Nebenbemerkungen, die Gedankensprünge, die versteckten Erkenntnisse zwischen den Zeilen. Zeig dass du wirklich zugehört hast.
+2. Spiegle zurück was du gehört hast, in deinen eigenen Worten – nicht als Zusammenfassung, sondern als echtes Verstehen.
+3. Stelle eine oder zwei tiefe Fragen die zum Weiterdenken einladen – basierend auf dem was die Person wirklich bewegt.
+4. Wenn du eine Beobachtung machst oder etwas auffällt (ein Muster, eine Stärke, ein Widerspruch) – sag es sanft und direkt.
+
+Sprich auf Deutsch, persönlich, warm, direkt. Kein "Als KI". Sei einfach präsent. Länge: so lang wie nötig um wirklich auf alles einzugehen – nicht kürzer.`,
+        messages: [{ role: 'user', content: `Mein Tagebucheintrag:\n\n${text}` }]
+      })
+    });
+    const data = await res.json();
+    const reflection = data.content?.[0]?.text || '';
+    document.getElementById('ai-loading').classList.remove('show');
+
+    const container = document.getElementById('inline-reflection-container');
+    container.innerHTML = `
+      <div class="inline-reflection" style="margin:0 20px 0;">
+        <div class="ref-label">✦ Reflexion für dich</div>
+        <div class="ref-text">${reflection}</div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('ai-loading').classList.remove('show');
+    alert('Verbindungsfehler. Bitte versuche es nochmal.');
+  }
+}
+
+
+// ── VOICE / SPEECH RECOGNITION ──
+let recognition = null;
+let isRecording = false;
+let timerInterval = null;
+let recordingSeconds = 0;
+let fullTranscript = '';
+let interimBuffer = '';
+
+function initRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  const r = new SpeechRecognition();
+  r.continuous = true;
+  r.interimResults = true;
+  r.lang = 'de-DE';
+  r.maxAlternatives = 1;
+
+  r.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        fullTranscript += t + ' ';
+        const ta = document.getElementById('journal-text');
+        ta.value = fullTranscript;
+        ta.scrollTop = ta.scrollHeight;
+      } else {
+        interim = t;
+      }
+    }
+    interimBuffer = interim;
+    // Update live box
+    const lastWords = fullTranscript.trim().split(' ').slice(-12).join(' ');
+    document.getElementById('live-confirmed').textContent = lastWords ? lastWords + (fullTranscript.trim().length > lastWords.length ? '...' : '') : '';
+    document.getElementById('live-interim').innerHTML = interim
+      ? interim + '<span class="live-cursor"></span>'
+      : '<span class="live-cursor"></span>';
+  };
+
+  r.onerror = (e) => {
+    if (e.error === 'no-speech') return; // just silence, keep going
+    if (e.error === 'aborted') return;
+    console.warn('Speech error:', e.error);
+  };
+
+  r.onend = () => {
+    // Auto-restart if still recording (handles browser timeout)
+    if (isRecording) {
+      try { r.start(); } catch(err) {}
+    }
+  };
+
+  return r;
+}
+
+function toggleVoice() {
+  if (isRecording) {
+    stopVoice();
+  } else {
+    startVoice();
+  }
+}
+
+function startVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Dein Browser unterstützt keine Spracherkennung. Bitte nutze Chrome oder Safari.');
+    return;
+  }
+
+  recognition = initRecognition();
+  fullTranscript = document.getElementById('journal-text').value;
+  if (fullTranscript && !fullTranscript.endsWith(' ')) fullTranscript += ' ';
+
+  try {
+    recognition.start();
+  } catch(e) { console.warn(e); return; }
+
+  isRecording = true;
+  recordingSeconds = 0;
+
+  // UI
+  const btn = document.getElementById('voice-btn');
+  btn.className = 'voice-btn recording';
+  btn.textContent = '⏸';
+  document.getElementById('voice-status').textContent = 'Aufnahme läuft...';
+  document.getElementById('voice-timer').style.display = 'block';
+  document.getElementById('voice-wave').classList.remove('hidden');
+  document.getElementById('voice-stop-btn').style.display = 'inline-block';
+  document.getElementById('live-box').classList.add('visible');
+  document.getElementById('live-confirmed').textContent = '';
+  document.getElementById('live-interim').innerHTML = '<span class="live-cursor"></span>';
+
+  timerInterval = setInterval(() => {
+    recordingSeconds++;
+    const m = Math.floor(recordingSeconds / 60);
+    const s = recordingSeconds % 60;
+    document.getElementById('voice-timer').textContent = m + ':' + String(s).padStart(2,'0');
+  }, 1000);
+}
+
+function stopVoice() {
+  if (!isRecording) return;
+  isRecording = false;
+  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+  clearInterval(timerInterval);
+
+  // UI reset
+  const btn = document.getElementById('voice-btn');
+  btn.className = 'voice-btn idle';
+  btn.textContent = '🎙️';
+  document.getElementById('voice-status').textContent = 'Aufnahme gespeichert ✓ – oder nochmal drücken';
+  document.getElementById('voice-timer').style.display = 'none';
+  document.getElementById('voice-wave').classList.add('hidden');
+  document.getElementById('voice-stop-btn').style.display = 'none';
+  document.getElementById('voice-preview').textContent = '';
+  document.getElementById('live-box').classList.remove('visible');
+}
+
+currentYear = new Date().getFullYear();
+renderHome();
+</script>
+</body>
+</html>
