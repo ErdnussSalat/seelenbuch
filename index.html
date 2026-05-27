@@ -453,12 +453,16 @@ Sprich auf Deutsch, persönlich, warm, direkt. Kein "Als KI". Sei einfach präse
 }
 
 
-// ── VOICE / MEDIA RECORDER + CLAUDE TRANSCRIPTION ──
-let mediaRecorder = null;
-let audioChunks = [];
+// ── VOICE / WEB SPEECH API (universal: iPhone Safari, Brave, Chrome, Edge) ──
+let recognition = null;
 let isRecording = false;
 let timerInterval = null;
 let recordingSeconds = 0;
+let fullTranscript = '';
+
+function getSpeechRecognition() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
 
 function toggleVoice() {
   if (isRecording) {
@@ -468,31 +472,27 @@ function toggleVoice() {
   }
 }
 
-async function startVoice() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+function startVoice() {
+  const SR = getSpeechRecognition();
+  if (!SR) {
+    alert('Dein Browser unterstützt keine Spracherkennung. Bitte nutze Safari (iPhone) oder Chrome/Brave (Desktop).');
+    return;
+  }
 
-    // Pick best supported format
-    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/mpeg']
-      .find(m => MediaRecorder.isTypeSupported(m)) || '';
+  // Accumulate from existing textarea content
+  fullTranscript = document.getElementById('journal-text').value.trim();
+  if (fullTranscript) fullTranscript += ' ';
 
-    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-    audioChunks = [];
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'de-DE';
+  recognition.maxAlternatives = 1;
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      await transcribeAudio();
-    };
-
-    mediaRecorder.start(1000); // collect chunks every second
+  recognition.onstart = () => {
     isRecording = true;
     recordingSeconds = 0;
 
-    // UI
     const btn = document.getElementById('voice-btn');
     btn.className = 'voice-btn recording';
     btn.textContent = '⏸';
@@ -510,101 +510,78 @@ async function startVoice() {
       const s = recordingSeconds % 60;
       document.getElementById('voice-timer').textContent = m + ':' + String(s).padStart(2,'0');
     }, 1000);
+  };
 
+  recognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        fullTranscript += t + ' ';
+        const ta = document.getElementById('journal-text');
+        ta.value = fullTranscript;
+        ta.scrollTop = ta.scrollHeight;
+      } else {
+        interim = t;
+      }
+    }
+    // Live box update
+    const lastWords = fullTranscript.trim().split(' ').slice(-10).join(' ');
+    document.getElementById('live-confirmed').textContent = lastWords ? '...' + lastWords : '';
+    document.getElementById('live-interim').innerHTML = interim
+      ? interim + '<span class="live-cursor"></span>'
+      : '<span class="live-cursor"></span>';
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    console.warn('Speech error:', e.error);
+    // On network error just restart
+    if (e.error === 'network' && isRecording) {
+      try { recognition.stop(); } catch(err) {}
+      setTimeout(() => { if (isRecording) recognition.start(); }, 500);
+    }
+  };
+
+  recognition.onend = () => {
+    // Auto-restart — handles browser 60s timeout (especially iOS)
+    if (isRecording) {
+      try { recognition.start(); } catch(err) {}
+    }
+  };
+
+  try {
+    recognition.start();
   } catch(e) {
-    alert('Kein Mikrofonzugriff. Bitte erlaube den Zugriff in den Browser-Einstellungen.');
     console.error(e);
+    alert('Fehler beim Starten. Bitte Seite neu laden.');
   }
 }
 
 function stopVoice() {
-  if (!isRecording || !mediaRecorder) return;
+  if (!isRecording) return;
   isRecording = false;
   clearInterval(timerInterval);
-  mediaRecorder.stop();
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
+    recognition = null;
+  }
 
-  // UI — zeige Transkribierungs-Status
   const btn = document.getElementById('voice-btn');
-  btn.className = 'voice-btn transcribing';
-  btn.textContent = '⏳';
-  document.getElementById('voice-status').textContent = 'Wird transkribiert...';
+  btn.className = 'voice-btn idle';
+  btn.textContent = '🎙️';
+  document.getElementById('voice-status').textContent = '✓ Fertig – oder nochmal aufnehmen';
   document.getElementById('voice-timer').style.display = 'none';
   document.getElementById('voice-wave').classList.add('hidden');
   document.getElementById('voice-stop-btn').style.display = 'none';
-  document.getElementById('live-interim').innerHTML = 'Claude transkribiert... <span class="live-cursor"></span>';
+  document.getElementById('live-interim').innerHTML = '';
+
+  setTimeout(() => {
+    document.getElementById('live-box').classList.remove('visible');
+  }, 1500);
 }
 
-async function transcribeAudio() {
-  try {
-    const mimeType = audioChunks[0]?.type || 'audio/webm';
-    const blob = new Blob(audioChunks, { type: mimeType });
 
-    // Convert to base64
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
-    // Send to Claude for transcription
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        system: `Du bist ein präziser Transkriptions-Assistent. Transkribiere das Audio exakt wie gesprochen, auf Deutsch. 
-Behalte alle Gedanken, auch wenn sie springen oder unvollständig sind. 
-Keine Korrekturen, keine Zusammenfassungen — nur die exakten Worte.
-Antworte NUR mit dem transkribierten Text, ohne Einleitung oder Erklärung.`,
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: mimeType.split(';')[0],
-              data: base64
-            }
-          }, {
-            type: 'text',
-            text: 'Bitte transkribiere diese Sprachaufnahme vollständig und wortgetreu.'
-          }]
-        }]
-      })
-    });
-
-    const data = await response.json();
-    const transcript = data.content?.[0]?.text || '';
-
-    // Append to textarea
-    const ta = document.getElementById('journal-text');
-    const existing = ta.value.trim();
-    ta.value = existing ? existing + '\n\n' + transcript : transcript;
-    ta.scrollTop = ta.scrollHeight;
-
-    // Update live box with result
-    document.getElementById('live-confirmed').textContent = transcript.slice(0, 100) + (transcript.length > 100 ? '...' : '');
-    document.getElementById('live-interim').innerHTML = '✓ Transkription abgeschlossen';
-
-    // Reset button after 2 seconds
-    setTimeout(() => {
-      const btn = document.getElementById('voice-btn');
-      btn.className = 'voice-btn idle';
-      btn.textContent = '🎙️';
-      document.getElementById('voice-status').textContent = '✓ Fertig – oder nochmal aufnehmen';
-      document.getElementById('live-box').classList.remove('visible');
-    }, 2000);
-
-  } catch(e) {
-    console.error('Transcription error:', e);
-    document.getElementById('voice-btn').className = 'voice-btn idle';
-    document.getElementById('voice-btn').textContent = '🎙️';
-    document.getElementById('voice-status').textContent = 'Fehler – bitte nochmal versuchen';
-    document.getElementById('live-interim').innerHTML = 'Fehler bei der Transkription';
-  }
-}
 
 currentYear = new Date().getFullYear();
 renderHome();
