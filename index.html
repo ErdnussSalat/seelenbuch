@@ -418,7 +418,7 @@ async function getReflection() {
   document.getElementById('inline-reflection-container').innerHTML = '';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://seelenbuch-proxy.hanuta879.workers.dev/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
