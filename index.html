@@ -453,60 +453,12 @@ Sprich auf Deutsch, persönlich, warm, direkt. Kein "Als KI". Sei einfach präse
 }
 
 
-// ── VOICE / SPEECH RECOGNITION ──
-let recognition = null;
+// ── VOICE / MEDIA RECORDER + CLAUDE TRANSCRIPTION ──
+let mediaRecorder = null;
+let audioChunks = [];
 let isRecording = false;
 let timerInterval = null;
 let recordingSeconds = 0;
-let fullTranscript = '';
-let interimBuffer = '';
-
-function initRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) return null;
-  const r = new SpeechRecognition();
-  r.continuous = true;
-  r.interimResults = true;
-  r.lang = 'de-DE';
-  r.maxAlternatives = 1;
-
-  r.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) {
-        fullTranscript += t + ' ';
-        const ta = document.getElementById('journal-text');
-        ta.value = fullTranscript;
-        ta.scrollTop = ta.scrollHeight;
-      } else {
-        interim = t;
-      }
-    }
-    interimBuffer = interim;
-    // Update live box
-    const lastWords = fullTranscript.trim().split(' ').slice(-12).join(' ');
-    document.getElementById('live-confirmed').textContent = lastWords ? lastWords + (fullTranscript.trim().length > lastWords.length ? '...' : '') : '';
-    document.getElementById('live-interim').innerHTML = interim
-      ? interim + '<span class="live-cursor"></span>'
-      : '<span class="live-cursor"></span>';
-  };
-
-  r.onerror = (e) => {
-    if (e.error === 'no-speech') return; // just silence, keep going
-    if (e.error === 'aborted') return;
-    console.warn('Speech error:', e.error);
-  };
-
-  r.onend = () => {
-    // Auto-restart if still recording (handles browser timeout)
-    if (isRecording) {
-      try { r.start(); } catch(err) {}
-    }
-  };
-
-  return r;
-}
 
 function toggleVoice() {
   if (isRecording) {
@@ -516,60 +468,142 @@ function toggleVoice() {
   }
 }
 
-function startVoice() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Dein Browser unterstützt keine Spracherkennung. Bitte nutze Chrome oder Safari.');
-    return;
-  }
-
-  recognition = initRecognition();
-  fullTranscript = document.getElementById('journal-text').value;
-  if (fullTranscript && !fullTranscript.endsWith(' ')) fullTranscript += ' ';
-
+async function startVoice() {
   try {
-    recognition.start();
-  } catch(e) { console.warn(e); return; }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-  isRecording = true;
-  recordingSeconds = 0;
+    // Pick best supported format
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/mpeg']
+      .find(m => MediaRecorder.isTypeSupported(m)) || '';
 
-  // UI
-  const btn = document.getElementById('voice-btn');
-  btn.className = 'voice-btn recording';
-  btn.textContent = '⏸';
-  document.getElementById('voice-status').textContent = 'Aufnahme läuft...';
-  document.getElementById('voice-timer').style.display = 'block';
-  document.getElementById('voice-wave').classList.remove('hidden');
-  document.getElementById('voice-stop-btn').style.display = 'inline-block';
-  document.getElementById('live-box').classList.add('visible');
-  document.getElementById('live-confirmed').textContent = '';
-  document.getElementById('live-interim').innerHTML = '<span class="live-cursor"></span>';
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    audioChunks = [];
 
-  timerInterval = setInterval(() => {
-    recordingSeconds++;
-    const m = Math.floor(recordingSeconds / 60);
-    const s = recordingSeconds % 60;
-    document.getElementById('voice-timer').textContent = m + ':' + String(s).padStart(2,'0');
-  }, 1000);
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      await transcribeAudio();
+    };
+
+    mediaRecorder.start(1000); // collect chunks every second
+    isRecording = true;
+    recordingSeconds = 0;
+
+    // UI
+    const btn = document.getElementById('voice-btn');
+    btn.className = 'voice-btn recording';
+    btn.textContent = '⏸';
+    document.getElementById('voice-status').textContent = 'Aufnahme läuft...';
+    document.getElementById('voice-timer').style.display = 'block';
+    document.getElementById('voice-wave').classList.remove('hidden');
+    document.getElementById('voice-stop-btn').style.display = 'inline-block';
+    document.getElementById('live-box').classList.add('visible');
+    document.getElementById('live-confirmed').textContent = '';
+    document.getElementById('live-interim').innerHTML = 'Ich höre zu... <span class="live-cursor"></span>';
+
+    timerInterval = setInterval(() => {
+      recordingSeconds++;
+      const m = Math.floor(recordingSeconds / 60);
+      const s = recordingSeconds % 60;
+      document.getElementById('voice-timer').textContent = m + ':' + String(s).padStart(2,'0');
+    }, 1000);
+
+  } catch(e) {
+    alert('Kein Mikrofonzugriff. Bitte erlaube den Zugriff in den Browser-Einstellungen.');
+    console.error(e);
+  }
 }
 
 function stopVoice() {
-  if (!isRecording) return;
+  if (!isRecording || !mediaRecorder) return;
   isRecording = false;
-  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
   clearInterval(timerInterval);
+  mediaRecorder.stop();
 
-  // UI reset
+  // UI — zeige Transkribierungs-Status
   const btn = document.getElementById('voice-btn');
-  btn.className = 'voice-btn idle';
-  btn.textContent = '🎙️';
-  document.getElementById('voice-status').textContent = 'Aufnahme gespeichert ✓ – oder nochmal drücken';
+  btn.className = 'voice-btn transcribing';
+  btn.textContent = '⏳';
+  document.getElementById('voice-status').textContent = 'Wird transkribiert...';
   document.getElementById('voice-timer').style.display = 'none';
   document.getElementById('voice-wave').classList.add('hidden');
   document.getElementById('voice-stop-btn').style.display = 'none';
-  document.getElementById('voice-preview').textContent = '';
-  document.getElementById('live-box').classList.remove('visible');
+  document.getElementById('live-interim').innerHTML = 'Claude transkribiert... <span class="live-cursor"></span>';
+}
+
+async function transcribeAudio() {
+  try {
+    const mimeType = audioChunks[0]?.type || 'audio/webm';
+    const blob = new Blob(audioChunks, { type: mimeType });
+
+    // Convert to base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // Send to Claude for transcription
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        system: `Du bist ein präziser Transkriptions-Assistent. Transkribiere das Audio exakt wie gesprochen, auf Deutsch. 
+Behalte alle Gedanken, auch wenn sie springen oder unvollständig sind. 
+Keine Korrekturen, keine Zusammenfassungen — nur die exakten Worte.
+Antworte NUR mit dem transkribierten Text, ohne Einleitung oder Erklärung.`,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: mimeType.split(';')[0],
+              data: base64
+            }
+          }, {
+            type: 'text',
+            text: 'Bitte transkribiere diese Sprachaufnahme vollständig und wortgetreu.'
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const transcript = data.content?.[0]?.text || '';
+
+    // Append to textarea
+    const ta = document.getElementById('journal-text');
+    const existing = ta.value.trim();
+    ta.value = existing ? existing + '\n\n' + transcript : transcript;
+    ta.scrollTop = ta.scrollHeight;
+
+    // Update live box with result
+    document.getElementById('live-confirmed').textContent = transcript.slice(0, 100) + (transcript.length > 100 ? '...' : '');
+    document.getElementById('live-interim').innerHTML = '✓ Transkription abgeschlossen';
+
+    // Reset button after 2 seconds
+    setTimeout(() => {
+      const btn = document.getElementById('voice-btn');
+      btn.className = 'voice-btn idle';
+      btn.textContent = '🎙️';
+      document.getElementById('voice-status').textContent = '✓ Fertig – oder nochmal aufnehmen';
+      document.getElementById('live-box').classList.remove('visible');
+    }, 2000);
+
+  } catch(e) {
+    console.error('Transcription error:', e);
+    document.getElementById('voice-btn').className = 'voice-btn idle';
+    document.getElementById('voice-btn').textContent = '🎙️';
+    document.getElementById('voice-status').textContent = 'Fehler – bitte nochmal versuchen';
+    document.getElementById('live-interim').innerHTML = 'Fehler bei der Transkription';
+  }
 }
 
 currentYear = new Date().getFullYear();
